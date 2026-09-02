@@ -1,0 +1,54 @@
+{
+  "colors": {
+    "primary": "#F7C84B",
+    "on-primary": "#17212B",
+    "secondary": "#4CE0C2",
+    "surface": "#071521",
+    "surface-container": "#10283B",
+    "surface-container-high": "#17364D",
+    "on-surface": "#F7FBFF",
+    "on-surface-variant": "#BDD0DF",
+    "selection": "#265C78",
+    "outline": "#7893A8",
+    "warning": "#FFB85C",
+    "error": "#FF737D"
+  },
+  "pairs": [
+    {
+      "foreground": "on-surface",
+      "background": "surface",
+      "minimum": 4.5,
+      "label": "Primary text"
+    },
+    {
+      "foreground": "on-surface",
+      "background": "surface-container",
+      "minimum": 4.5,
+      "label": "Panel text"
+    },
+    {
+      "foreground": "on-surface-variant",
+      "background": "surface-container",
+      "minimum": 4.5,
+      "label": "Secondary text"
+    },
+    {
+      "foreground": "on-primary",
+      "background": "primary",
+      "minimum": 4.5,
+      "label": "Primary action"
+    },
+    {
+      "foreground": "on-surface",
+      "background": "selection",
+      "minimum": 4.5,
+      "label": "Selected menu item"
+    },
+    {
+      "foreground": "outline",
+      "background": "surface-container",
+      "minimum": 3.0,
+      "label": "Control boundary"
+    }
+  ]
+}
