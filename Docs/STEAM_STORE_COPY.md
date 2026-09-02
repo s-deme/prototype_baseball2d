@@ -33,6 +33,6 @@ Baseball / Sports / Arcade / 2D / Singleplayer / Controller / Family Friendly
 - 対応OS: Windows 10/11 64-bit
 - 言語: 日本語（インターフェイス）
 - プレイ人数: 1人
-- 入力: キーボード、ゲームパッド（メニューはマウスにも対応）
+- 入力: キーボード、XInputゲームパッド／Steam Input（メニューはマウスにも対応）
 
 コントローラー対応レベルと最低システム要件はRelease Candidateの実機QA後に確定します。未実装の実績、クラウドセーブ、オンライン対戦はストア機能として選択しません。

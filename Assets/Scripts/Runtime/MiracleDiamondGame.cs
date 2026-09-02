@@ -55,6 +55,7 @@ namespace MiracleDiamond
         private static readonly string[] RivalBatSpecials = { "流星打法", "鋼鉄打法", "冥界打法" };
 
         private ScreenMode screen = ScreenMode.Title;
+        private ScreenMode optionsReturnScreen = ScreenMode.Title;
         private PlayMoment moment;
         private GameRules game;
         private GameAudio gameAudio;
@@ -108,6 +109,7 @@ namespace MiracleDiamond
         private bool aiSpecial;
         private bool hasPitchHistory;
         private bool moonMode;
+        private bool fullScreenEnabled;
         private bool screenShakeEnabled;
         private bool reducedFlash;
         private int masterVolume;
@@ -281,7 +283,7 @@ namespace MiracleDiamond
 
             if (screen == ScreenMode.Paused)
             {
-                UpdateMenu(ref pauseIndex, 3, ActivatePauseItem);
+                UpdateMenu(ref pauseIndex, 4, ActivatePauseItem);
                 if (PressedBack())
                 {
                     ResumeGame();
@@ -873,7 +875,7 @@ namespace MiracleDiamond
             string[] values =
             {
                 masterVolume + " / 10",
-                Screen.fullScreen ? "フルスクリーン" : "ウィンドウ",
+                fullScreenEnabled ? "フルスクリーン" : "ウィンドウ",
                 screenShakeEnabled ? "ON" : "OFF",
                 reducedFlash ? "ON" : "OFF",
                 string.Empty
@@ -885,7 +887,7 @@ namespace MiracleDiamond
                 if (DrawMenuButton(rect, labels[i] + (values[i].Length > 0 ? "    " + values[i] : string.Empty), optionsIndex == i))
                 {
                     optionsIndex = i;
-                    if (i == 4) ReturnToTitle(); else AdjustOption(i, 1);
+                    if (i == 4) CloseOptions(); else AdjustOption(i, 1);
                 }
             }
             GUI.Label(new Rect(348f, 576f, 584f, 30f), "← → 変更   Esc / B 保存して戻る", centeredBodyStyle);
@@ -977,11 +979,13 @@ namespace MiracleDiamond
         {
             Color playerColor = moonMode ? Theme.MoonPlayer : Theme.Primary;
             Color rivalColor = Theme.Secondary;
-            DrawPlayer(new Vector2(640f, 382f), game.PlayerIsBatting ? rivalColor : playerColor, true);
-            DrawPlayer(new Vector2(640f, 585f), game.PlayerIsBatting ? playerColor : rivalColor, false);
-            DrawPlayer(new Vector2(855f, 400f), game.RunnerOnFirst ? playerColor : rivalColor, true);
-            DrawPlayer(new Vector2(640f, 215f), game.RunnerOnSecond ? playerColor : rivalColor, true);
-            DrawPlayer(new Vector2(425f, 400f), game.RunnerOnThird ? playerColor : rivalColor, true);
+            Color battingColor = game.PlayerIsBatting ? playerColor : rivalColor;
+            Color fieldingColor = game.PlayerIsBatting ? rivalColor : playerColor;
+            DrawPlayer(new Vector2(640f, 382f), fieldingColor, true);
+            DrawPlayer(new Vector2(640f, 585f), battingColor, false);
+            DrawPlayer(new Vector2(855f, 400f), game.RunnerOnFirst ? battingColor : fieldingColor, true);
+            DrawPlayer(new Vector2(640f, 215f), game.RunnerOnSecond ? battingColor : fieldingColor, true);
+            DrawPlayer(new Vector2(425f, 400f), game.RunnerOnThird ? battingColor : fieldingColor, true);
 
             float laneX = 640f + targetLane * 76f;
             Color targetColor = playerSpecial ? Theme.Warning : Theme.Focus;
@@ -1091,10 +1095,10 @@ namespace MiracleDiamond
             DrawColorRect(new Rect(0f, 0f, VirtualWidth, VirtualHeight), new Color(0f, 0f, 0f, 0.72f));
             DrawPanel(new Rect(390f, 150f, 500f, 420f), true);
             GUI.Label(new Rect(430f, 182f, 420f, 60f), "ポーズ", headingStyle);
-            string[] labels = { "ゲームに戻る", "最初からやり直す", "タイトルへ" };
+            string[] labels = { "ゲームに戻る", "設定", "最初からやり直す", "タイトルへ" };
             for (int i = 0; i < labels.Length; i++)
             {
-                Rect rect = new Rect(450f, 280f + i * 72f, 380f, 54f);
+                Rect rect = new Rect(450f, 250f + i * 68f, 380f, 54f);
                 if (DrawMenuButton(rect, labels[i], pauseIndex == i))
                 {
                     pauseIndex = i;
@@ -1213,14 +1217,18 @@ namespace MiracleDiamond
         private void DrawLine(Vector2 start, Vector2 end, float width, Color color)
         {
             Vector2 delta = end - start;
-            Rect rect = new Rect(start.x, start.y - width * 0.5f, delta.magnitude, width);
+            Vector2 midpoint = (start + end) * 0.5f;
+            Rect rect = new Rect(midpoint.x - delta.magnitude * 0.5f,
+                midpoint.y - width * 0.5f, delta.magnitude, width);
             DrawRotatedRect(rect, color, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
         }
 
         private void DrawRotatedRect(Rect rect, Color color, float angle)
         {
             Matrix4x4 matrix = GUI.matrix;
-            GUIUtility.RotateAroundPivot(angle, rect.center);
+            GUI.matrix = matrix *
+                Matrix4x4.TRS(rect.center, Quaternion.Euler(0f, 0f, angle), Vector3.one) *
+                Matrix4x4.TRS(-rect.center, Quaternion.identity, Vector3.one);
             DrawColorRect(rect, color);
             GUI.matrix = matrix;
         }
@@ -1346,7 +1354,10 @@ namespace MiracleDiamond
             {
                 case 0: StartNewGame(); break;
                 case 1: screen = ScreenMode.HowTo; break;
-                case 2: screen = ScreenMode.Options; break;
+                case 2:
+                    optionsReturnScreen = ScreenMode.Title;
+                    screen = ScreenMode.Options;
+                    break;
                 case 3: screen = ScreenMode.Records; break;
                 case 4:
 #if UNITY_EDITOR
@@ -1366,15 +1377,24 @@ namespace MiracleDiamond
                 return;
             }
 
+            if (index == 1)
+            {
+                optionsReturnScreen = ScreenMode.Paused;
+                optionsIndex = 0;
+                pendingPauseAction = -1;
+                screen = ScreenMode.Options;
+                return;
+            }
+
             if (pendingPauseAction == index && pendingPauseTime > 0f)
             {
-                if (index == 1) StartNewGame(); else ReturnToTitle();
+                if (index == 2) StartNewGame(); else ReturnToTitle();
                 return;
             }
 
             pendingPauseAction = index;
             pendingPauseTime = 2.5f;
-            toastText = index == 1 ? "もう一度決定で最初からやり直す" : "もう一度決定でタイトルへ戻る";
+            toastText = index == 2 ? "もう一度決定で最初からやり直す" : "もう一度決定でタイトルへ戻る";
             toastTime = 2.5f;
             gameAudio.Play(GameAudio.Cue.Warning);
         }
@@ -1399,6 +1419,13 @@ namespace MiracleDiamond
             gameAudio.Play(GameAudio.Cue.Back);
         }
 
+        private void CloseOptions()
+        {
+            SaveSettings();
+            screen = optionsReturnScreen;
+            gameAudio.Play(GameAudio.Cue.Back);
+        }
+
         private void UpdateOptions()
         {
             int vertical = ReadVerticalPress();
@@ -1418,7 +1445,7 @@ namespace MiracleDiamond
             {
                 if (optionsIndex == 4)
                 {
-                    ReturnToTitle();
+                    CloseOptions();
                 }
                 else
                 {
@@ -1428,7 +1455,7 @@ namespace MiracleDiamond
 
             if (PressedBack())
             {
-                ReturnToTitle();
+                CloseOptions();
             }
         }
 
@@ -1441,9 +1468,10 @@ namespace MiracleDiamond
             }
             else if (index == 1)
             {
-                Screen.fullScreenMode = Screen.fullScreen
-                    ? FullScreenMode.Windowed
-                    : FullScreenMode.FullScreenWindow;
+                fullScreenEnabled = !fullScreenEnabled;
+                Screen.fullScreenMode = fullScreenEnabled
+                    ? FullScreenMode.FullScreenWindow
+                    : FullScreenMode.Windowed;
             }
             else if (index == 2)
             {
@@ -1460,6 +1488,8 @@ namespace MiracleDiamond
         private void LoadSettings()
         {
             masterVolume = PlayerPrefs.GetInt(PrefPrefix + "volume", 8);
+            fullScreenEnabled = PlayerPrefs.GetInt(PrefPrefix + "fullscreen", Screen.fullScreen ? 1 : 0) == 1;
+            Screen.fullScreenMode = fullScreenEnabled ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
             screenShakeEnabled = PlayerPrefs.GetInt(PrefPrefix + "shake", 1) == 1;
             reducedFlash = PlayerPrefs.GetInt(PrefPrefix + "reduced_flash", 0) == 1;
             moonMode = PlayerPrefs.GetInt(PrefPrefix + "moon_mode", 0) == 1;
@@ -1468,6 +1498,7 @@ namespace MiracleDiamond
         private void SaveSettings()
         {
             PlayerPrefs.SetInt(PrefPrefix + "volume", masterVolume);
+            PlayerPrefs.SetInt(PrefPrefix + "fullscreen", fullScreenEnabled ? 1 : 0);
             PlayerPrefs.SetInt(PrefPrefix + "shake", screenShakeEnabled ? 1 : 0);
             PlayerPrefs.SetInt(PrefPrefix + "reduced_flash", reducedFlash ? 1 : 0);
             PlayerPrefs.Save();
