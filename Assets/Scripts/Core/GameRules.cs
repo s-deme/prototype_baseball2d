@@ -304,13 +304,13 @@ namespace MiracleDiamond
     {
         public static PlateResult ResolveBatting(
             float timingError,
-            int laneDifference,
+            float contactError,
             bool batterSpecial,
             bool pitcherSpecial,
             float roll)
         {
             timingError = Clamp01(Math.Abs(timingError));
-            laneDifference = Math.Abs(laneDifference);
+            contactError = Math.Abs(contactError);
             roll = Clamp01(roll);
 
             float window = 0.24f + (batterSpecial ? 0.16f : 0f) - (pitcherSpecial ? 0.07f : 0f);
@@ -319,13 +319,13 @@ namespace MiracleDiamond
                 return PlateResult.Strike;
             }
 
-            if (laneDifference > 0 && !batterSpecial)
+            if (contactError > (batterSpecial ? 1.05f : 0.58f))
             {
-                return roll < 0.55f ? PlateResult.Strike : PlateResult.Foul;
+                return roll < 0.68f ? PlateResult.Strike : PlateResult.Foul;
             }
 
             float quality = 1f - timingError / Math.Max(0.08f, window);
-            quality -= laneDifference * (batterSpecial ? 0.12f : 0.32f);
+            quality -= contactError * (batterSpecial ? 0.18f : 0.72f);
             quality += batterSpecial ? 0.24f : 0f;
             quality -= pitcherSpecial ? 0.16f : 0f;
             quality = Clamp01(quality);
@@ -381,6 +381,28 @@ namespace MiracleDiamond
             if (roll < strike + fieldOut + single + doubleHit) return PlateResult.Double;
             if (roll < strike + fieldOut + single + doubleHit + homeRun) return PlateResult.HomeRun;
             return accuracy < 0.45f ? PlateResult.Ball : PlateResult.Foul;
+        }
+
+        public static float PitchPosition(float start, float bend, float progress)
+        {
+            progress = Clamp01(progress);
+            return Math.Max(-1.35f, Math.Min(1.35f, start + bend * progress * progress));
+        }
+
+        public static bool IsStrikeLocation(float position)
+        {
+            return Math.Abs(position) <= 1f;
+        }
+
+        public static float PitchControlError(float position)
+        {
+            float distance = Math.Abs(position);
+            if (distance > 1f)
+            {
+                return Clamp01(0.43f + (distance - 1f) * 0.8f);
+            }
+
+            return 0.12f + Math.Abs(distance - 0.72f) * 0.25f;
         }
 
         private static float Clamp01(float value)

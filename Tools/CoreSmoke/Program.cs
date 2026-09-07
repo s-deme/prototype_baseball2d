@@ -12,11 +12,12 @@ internal static class Program
         BottomThirdLeadIsWalkOff();
         WalkOffSingleStopsAtWinningRun();
         ResolverHonorsTimingAndSpecial();
+        PitchControlBendsLateAndRewardsTheCorners();
         SpecialsImproveExpectedOutcome();
         MixingPitchesImprovesExpectedOutcome();
         RandomGamesTerminateWithValidState();
         RivalLadderAdvancesOnlyOnWin();
-        Console.WriteLine("Core smoke checks passed (11/11).");
+        Console.WriteLine("Core smoke checks passed (12/12).");
     }
 
     private static void ThreeStrikesMakeAnOut()
@@ -78,7 +79,17 @@ internal static class Program
     {
         Check(PlayResolver.ResolveBatting(0.9f, 0, false, false, 0f) == PlateResult.Strike, "late swing");
         Check(PlayResolver.ResolveBatting(0.2f, 1, true, false, 0f) == PlateResult.HomeRun, "special swing");
+        Check(IsHit(PlayResolver.ResolveBatting(0.02f, 0.1f, false, false, 0.5f)) &&
+            PlayResolver.ResolveBatting(0.02f, 0.9f, false, false, 0.5f) == PlateResult.Strike,
+            "continuous bat contact");
         Check(PlayResolver.ResolvePitching(0.5f, PitchType.Fastball, 0, false, false, 0.2f) == PlateResult.Ball, "wild pitch");
+    }
+
+    private static void PitchControlBendsLateAndRewardsTheCorners()
+    {
+        Check(Math.Abs(PlayResolver.PitchPosition(0f, 0.8f, 0.5f) - 0.2f) < 0.001f, "late pitch break");
+        Check(PlayResolver.IsStrikeLocation(1f) && !PlayResolver.IsStrikeLocation(1.01f), "strike-zone edge");
+        Check(PlayResolver.PitchControlError(0.72f) < PlayResolver.PitchControlError(0f), "corner pitching");
     }
 
     private static void WalkOffSingleStopsAtWinningRun()

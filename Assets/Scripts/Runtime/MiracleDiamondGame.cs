@@ -85,15 +85,16 @@ namespace MiracleDiamond
         private int pauseIndex;
         private int pendingPauseAction = -1;
         private int resultIndex;
-        private int targetLane;
-        private int pitchLane;
         private PitchType pitchType;
         private PlateResult pendingResult;
         private PitchType lastPlayerPitchType;
         private float momentTime;
         private float ballProgress;
-        private float pitchMeter;
-        private float pitchMeterDirection = 1f;
+        private float playerPosition;
+        private float pitchStartPosition;
+        private float pitchBend;
+        private float lastPlayerPitchPosition;
+        private float swingTime;
         private float flashAlpha;
         private float shakeTime;
         private float shakeStrength;
@@ -103,7 +104,7 @@ namespace MiracleDiamond
         private int aiSpirit;
         private int homeRunsThisGame;
         private int longestHit;
-        private int lastPlayerPitchLane;
+        private int pendingDeception;
         private int rivalStage;
         private bool playerSpecial;
         private bool aiSpecial;
@@ -181,7 +182,7 @@ namespace MiracleDiamond
             rivalStage = 0;
             StartNewGame();
             moment = PlayMoment.Ready;
-            pitchMeter = 0.5f;
+            playerPosition = 0.55f;
             yield return CaptureFrame(Path.Combine(outputDirectory, "store_01_pitching.png"));
 
             game.GainSpirit(GameRules.MaximumSpirit);
@@ -361,13 +362,6 @@ namespace MiracleDiamond
                 return;
             }
 
-            int horizontal = ReadHorizontalPress();
-            if (horizontal != 0)
-            {
-                targetLane = Mathf.Clamp(targetLane + horizontal, -1, 1);
-                gameAudio.Play(GameAudio.Cue.Move);
-            }
-
             if (game.PlayerIsBatting)
             {
                 UpdateBatting(delta);
@@ -380,6 +374,8 @@ namespace MiracleDiamond
 
         private void UpdateBatting(float delta)
         {
+            playerPosition = Mathf.Clamp(playerPosition + ReadHorizontalAxis() * delta * 1.9f, -1.05f, 1.05f);
+
             if (moment == PlayMoment.Ready)
             {
                 if (momentTime >= 0.72f)
@@ -396,18 +392,24 @@ namespace MiracleDiamond
             ballProgress += delta / duration;
             if (PressedConfirm())
             {
-                float timingError = Mathf.Abs(ballProgress - 0.82f);
+                float timingError = Mathf.Abs(ballProgress - 0.86f);
+                float contactError = playerPosition - PlayResolver.PitchPosition(
+                    pitchStartPosition, pitchBend, ballProgress);
+                swingTime = 0.22f;
                 PlateResult result = PlayResolver.ResolveBatting(
                     timingError,
-                    targetLane - pitchLane,
+                    contactError,
                     playerSpecial,
                     aiSpecial,
                     NextRoll());
-                ResolvePlay(result, timingError <= 0.07f ? "ジャストミート！" : string.Empty);
+                ResolvePlay(result, timingError <= 0.06f && Mathf.Abs(contactError) <= 0.18f
+                    ? "ジャストミート！" : string.Empty);
             }
             else if (ballProgress > 1.08f)
             {
-                ResolvePlay(PlateResult.Strike, "見逃し");
+                float finalPosition = PlayResolver.PitchPosition(pitchStartPosition, pitchBend, 1f);
+                ResolvePlay(PlayResolver.IsStrikeLocation(finalPosition) ? PlateResult.Strike : PlateResult.Ball,
+                    PlayResolver.IsStrikeLocation(finalPosition) ? "見逃し" : "よく見た！");
             }
         }
 
@@ -415,17 +417,7 @@ namespace MiracleDiamond
         {
             if (moment == PlayMoment.Ready)
             {
-                pitchMeter += delta * pitchMeterDirection * 1.45f;
-                if (pitchMeter >= 1f)
-                {
-                    pitchMeter = 1f;
-                    pitchMeterDirection = -1f;
-                }
-                else if (pitchMeter <= 0f)
-                {
-                    pitchMeter = 0f;
-                    pitchMeterDirection = 1f;
-                }
+                playerPosition = Mathf.Clamp(playerPosition + ReadHorizontalAxis() * delta * 1.55f, -0.82f, 0.82f);
 
                 int vertical = ReadVerticalPress();
                 if (vertical != 0)
@@ -437,20 +429,16 @@ namespace MiracleDiamond
 
                 if (PressedConfirm())
                 {
-                    float releaseError = Mathf.Abs(pitchMeter - 0.5f);
-                    int deception = hasPitchHistory
-                        ? (targetLane != lastPlayerPitchLane ? 1 : 0) + (pitchType != lastPlayerPitchType ? 1 : 0)
+                    pendingDeception = hasPitchHistory
+                        ? (Mathf.Abs(playerPosition - lastPlayerPitchPosition) >= 0.35f ? 1 : 0) +
+                            (pitchType != lastPlayerPitchType ? 1 : 0)
                         : 2;
-                    pendingResult = PlayResolver.ResolvePitching(
-                        releaseError,
-                        pitchType,
-                        deception,
-                        playerSpecial,
-                        aiSpecial,
-                        NextRoll());
                     pendingDetail = playerSpecial ? "消える落差！" :
-                        deception == 0 ? "配球を読まれた！" : deception == 2 ? "裏をかいた！" : string.Empty;
-                    lastPlayerPitchLane = targetLane;
+                        pendingDeception == 0 ? "配球を読まれた！" :
+                        pendingDeception == 2 ? "裏をかいた！" : string.Empty;
+                    pitchStartPosition = playerPosition;
+                    pitchBend = 0f;
+                    lastPlayerPitchPosition = playerPosition;
                     lastPlayerPitchType = pitchType;
                     hasPitchHistory = true;
                     moment = PlayMoment.BallInFlight;
@@ -461,9 +449,25 @@ namespace MiracleDiamond
                 return;
             }
 
-            ballProgress += delta / (playerSpecial ? 0.48f : 0.72f);
+            float curveSpeed = pitchType == PitchType.Curve ? 1.35f :
+                pitchType == PitchType.Changeup ? 1f : 0.72f;
+            pitchBend += ReadHorizontalAxis() * delta * curveSpeed * (playerSpecial ? 1.7f : 1f);
+            pitchBend = Mathf.Clamp(pitchBend, -1.8f, 1.8f);
+            ballProgress += delta / (playerSpecial ? 0.48f : PitchDuration(pitchType) * 0.78f);
             if (ballProgress >= 1f)
             {
+                float finalPosition = PlayResolver.PitchPosition(pitchStartPosition, pitchBend, 1f);
+                pendingResult = PlayResolver.ResolvePitching(
+                    PlayResolver.PitchControlError(finalPosition),
+                    pitchType,
+                    pendingDeception,
+                    playerSpecial,
+                    aiSpecial,
+                    NextRoll());
+                if (!PlayResolver.IsStrikeLocation(finalPosition))
+                {
+                    pendingDetail = pendingResult == PlateResult.Ball ? "見送られた" : "ボール球を振らせた！";
+                }
                 ResolvePlay(pendingResult, pendingDetail);
             }
         }
@@ -521,11 +525,8 @@ namespace MiracleDiamond
             moment = PlayMoment.Ready;
             momentTime = 0f;
             ballProgress = 0f;
-            targetLane = 0;
-            pitchLane = random.Next(-1, 2);
+            playerPosition = 0f;
             pitchType = (PitchType)random.Next(0, 3);
-            pitchMeter = 0f;
-            pitchMeterDirection = 1f;
             pendingDetail = string.Empty;
             playerSpecial = false;
             aiSpecial = aiSpirit >= GameRules.MaximumSpirit;
@@ -536,6 +537,18 @@ namespace MiracleDiamond
                     (game.PlayerIsBatting ? RivalPitchSpecials[rivalStage] : RivalBatSpecials[rivalStage]) + "！";
                 toastTime = 1.25f;
                 gameAudio.Play(GameAudio.Cue.Warning);
+            }
+
+            pitchStartPosition = NextRoll() * 1.5f - 0.75f;
+            float breakDirection = NextRoll() < 0.5f ? -1f : 1f;
+            pitchBend = pitchType == PitchType.Curve
+                ? breakDirection * (0.38f + NextRoll() * 0.18f)
+                : pitchType == PitchType.Changeup
+                    ? breakDirection * (0.12f + NextRoll() * 0.12f)
+                    : (NextRoll() - 0.5f) * 0.12f;
+            if (aiSpecial)
+            {
+                pitchBend *= 1.45f;
             }
         }
 
@@ -664,6 +677,7 @@ namespace MiracleDiamond
         {
             flashAlpha = Mathf.MoveTowards(flashAlpha, 0f, delta * 1.8f);
             shakeTime = Mathf.Max(0f, shakeTime - delta);
+            swingTime = Mathf.Max(0f, swingTime - delta);
             toastTime = Mathf.Max(0f, toastTime - delta);
             pendingPauseTime = Mathf.Max(0f, pendingPauseTime - delta);
 
@@ -839,10 +853,10 @@ namespace MiracleDiamond
             GUI.Label(new Rect(160f, 86f, 960f, 52f), "あそびかた", headingStyle);
 
             DrawInstructionCard(new Rect(160f, 160f, 456f, 205f), "攻撃 / バッティング",
-                "← → で狙うコースを選択\nボールが手元に来たら Z / A でスイング\nタイミングとコースが合うほど長打！",
+                "← → で打者を自由に移動\n曲がる球筋を見て Z / A でスイング\n芯とタイミングが合うほど長打！",
                 Theme.Primary);
             DrawInstructionCard(new Rect(664f, 160f, 456f, 205f), "守備 / ピッチング",
-                "← → でコース、↑ ↓ で球種を選択\nメーター中央で Z / A を押して投球\n同じ配球を続けると読まれやすい！",
+                "← → で投手を移動、↑ ↓ で球種を選択\nZ / A で投球後、← → でボールを曲げる\n同じ配球を続けると読まれやすい！",
                 Theme.Secondary);
             DrawInstructionCard(new Rect(160f, 397f, 960f, 158f), "必殺技 / CLUTCH SPIRIT",
                 "プレイでスピリットが増加。100になったら X / Y で発動。\n攻撃は『彗星スイング』、守備は『まぼろしフォーク』。\n3回終了時に同点なら最大5回まで延長。5回同点は引き分け。",
@@ -981,28 +995,35 @@ namespace MiracleDiamond
             Color rivalColor = Theme.Secondary;
             Color battingColor = game.PlayerIsBatting ? playerColor : rivalColor;
             Color fieldingColor = game.PlayerIsBatting ? rivalColor : playerColor;
-            DrawPlayer(new Vector2(640f, 382f), fieldingColor, true);
-            DrawPlayer(new Vector2(640f, 585f), battingColor, false);
+            float pitcherPosition = game.PlayerIsBatting ? pitchStartPosition : playerPosition;
+            float batterPosition = game.PlayerIsBatting ? playerPosition : 0f;
+            Vector2 pitcher = new Vector2(640f + pitcherPosition * 88f, 382f);
+            Vector2 batter = new Vector2(640f + batterPosition * 88f, 585f);
+            DrawPlayer(pitcher, fieldingColor, true);
+            float swing = swingTime > 0f ? 1f - swingTime / 0.22f : 0f;
+            DrawPlayer(batter, battingColor, false, Mathf.Lerp(-18f, 74f, swing));
             DrawPlayer(new Vector2(855f, 400f), game.RunnerOnFirst ? battingColor : fieldingColor, true);
             DrawPlayer(new Vector2(640f, 215f), game.RunnerOnSecond ? battingColor : fieldingColor, true);
             DrawPlayer(new Vector2(425f, 400f), game.RunnerOnThird ? battingColor : fieldingColor, true);
 
-            float laneX = 640f + targetLane * 76f;
             Color targetColor = playerSpecial ? Theme.Warning : Theme.Focus;
-            DrawOutline(new Rect(laneX - 31f, 516f, 62f, 82f), targetColor, 3f);
+            DrawOutline(new Rect(552f, 516f, 176f, 82f), targetColor, 3f);
 
             if (moment == PlayMoment.BallInFlight)
             {
-                float destination = game.PlayerIsBatting ? 640f + pitchLane * 76f : 640f + targetLane * 76f;
-                Vector2 start = new Vector2(640f, 394f);
-                Vector2 end = new Vector2(destination, 568f);
-                Vector2 ball = Vector2.Lerp(start, end, Mathf.Clamp01(ballProgress));
+                float progress = Mathf.Clamp01(ballProgress);
+                Vector2 ball = new Vector2(
+                    640f + PlayResolver.PitchPosition(pitchStartPosition, pitchBend, progress) * 88f,
+                    Mathf.Lerp(394f, 568f, progress));
                 if (playerSpecial || aiSpecial)
                 {
                     Color trail = playerSpecial ? Theme.Primary : Theme.Error;
                     for (int i = 1; i <= 5; i++)
                     {
-                        Vector2 ghost = Vector2.Lerp(start, end, Mathf.Clamp01(ballProgress - i * 0.045f));
+                        float ghostProgress = Mathf.Clamp01(ballProgress - i * 0.045f);
+                        Vector2 ghost = new Vector2(
+                            640f + PlayResolver.PitchPosition(pitchStartPosition, pitchBend, ghostProgress) * 88f,
+                            Mathf.Lerp(394f, 568f, ghostProgress));
                         DrawTexture(new Rect(ghost.x - 9f, ghost.y - 9f, 18f, 18f), softCircle,
                             new Color(trail.r, trail.g, trail.b, 0.42f - i * 0.05f));
                     }
@@ -1043,32 +1064,26 @@ namespace MiracleDiamond
             GUI.Label(new Rect(1024f, 635f, 212f, 44f),
                 aiSpirit >= 100 ? "必殺技に警戒！" : aiSpirit + " / 100", centeredBodyStyle);
 
-            Rect actionPanel = new Rect(300f, 565f, 680f, 114f);
+            Rect actionPanel = new Rect(300f, 105f, 680f, 92f);
             DrawPanel(actionPanel, false);
             if (game.PlayerIsBatting)
             {
-                string prompt = moment == PlayMoment.Ready ? "コースを狙え" : "引きつけて打て！";
-                GUI.Label(new Rect(320f, 575f, 640f, 35f), prompt, subtitleStyle);
-                GUI.Label(new Rect(320f, 620f, 640f, 35f),
-                    "← → 狙い   Z / A スイング   X / Y 必殺", centeredBodyStyle);
+                string prompt = moment == PlayMoment.Ready ? "左右に動いて球を待て" : "球筋を見て打て！";
+                GUI.Label(new Rect(320f, 111f, 640f, 35f), prompt, subtitleStyle);
+                GUI.Label(new Rect(320f, 151f, 640f, 35f),
+                    "← → 打者移動   Z / A スイング   X / Y 必殺", centeredBodyStyle);
             }
             else
             {
-                GUI.Label(new Rect(320f, 575f, 640f, 32f),
-                    PitchLabel(pitchType) + "   コース " + LaneLabel(targetLane), subtitleStyle);
-                DrawPitchMeter(new Rect(390f, 620f, 500f, 20f));
-                GUI.Label(new Rect(320f, 647f, 640f, 24f),
-                    "← → コース   ↑ ↓ 球種   Z / A 投球", tinyStyle);
+                GUI.Label(new Rect(320f, 111f, 640f, 32f),
+                    moment == PlayMoment.Ready
+                        ? PitchLabel(pitchType) + "   投手を動かしてコースを作れ"
+                        : "投球後も ← → でボールを曲げろ！", subtitleStyle);
+                GUI.Label(new Rect(320f, 151f, 640f, 30f),
+                    moment == PlayMoment.Ready
+                        ? "← → 投手移動   ↑ ↓ 球種   Z / A 投球"
+                        : "← → 変化   球筋を端へ導け", centeredBodyStyle);
             }
-        }
-
-        private void DrawPitchMeter(Rect rect)
-        {
-            DrawColorRect(rect, Theme.Surface);
-            DrawColorRect(new Rect(rect.center.x - 38f, rect.y, 76f, rect.height), Theme.Success);
-            float x = rect.x + rect.width * pitchMeter;
-            DrawColorRect(new Rect(x - 4f, rect.y - 5f, 8f, rect.height + 10f), Theme.Focus);
-            DrawOutline(rect, Theme.Outline, 2f);
         }
 
         private void DrawResultBanner()
@@ -1159,14 +1174,14 @@ namespace MiracleDiamond
             }
         }
 
-        private void DrawPlayer(Vector2 position, Color uniform, bool fielder)
+        private void DrawPlayer(Vector2 position, Color uniform, bool fielder, float batAngle = -18f)
         {
             DrawTexture(new Rect(position.x - 19f, position.y - 19f, 38f, 38f), circle, Theme.Shadow);
             DrawTexture(new Rect(position.x - 15f, position.y - 15f, 30f, 30f), circle, uniform);
             DrawColorRect(new Rect(position.x - 13f, position.y - 4f, 26f, 10f), Theme.OnSurface);
             if (!fielder)
             {
-                DrawRotatedRect(new Rect(position.x + 14f, position.y - 34f, 6f, 52f), Theme.Bat, -18f);
+                DrawRotatedRect(new Rect(position.x + 14f, position.y - 34f, 6f, 52f), Theme.Bat, batAngle);
             }
         }
 
@@ -1552,6 +1567,14 @@ namespace MiracleDiamond
             return 0;
         }
 
+        private static float ReadHorizontalAxis()
+        {
+            float keyboard = 0f;
+            if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A)) keyboard -= 1f;
+            if (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D)) keyboard += 1f;
+            return keyboard != 0f ? keyboard : Mathf.Clamp(SafeAxis("Horizontal"), -1f, 1f);
+        }
+
         private int ReadVerticalPress()
         {
             if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W)) return -1;
@@ -1626,11 +1649,6 @@ namespace MiracleDiamond
             if (type == PitchType.Fastball) return "ストレート";
             if (type == PitchType.Curve) return "カーブ";
             return "チェンジアップ";
-        }
-
-        private static string LaneLabel(int lane)
-        {
-            return lane < 0 ? "左" : lane > 0 ? "右" : "中央";
         }
 
         private static string Dots(int filled, int maximum)
