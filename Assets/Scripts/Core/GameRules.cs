@@ -146,24 +146,16 @@ namespace MiracleDiamond
                     RecordOut();
                     break;
                 case PlateResult.Single:
-                    resolution.PlateEnded = true;
-                    AdvanceBatter(1);
-                    ResetCount();
+                    RecordHit(1, ref resolution);
                     break;
                 case PlateResult.Double:
-                    resolution.PlateEnded = true;
-                    AdvanceBatter(2);
-                    ResetCount();
+                    RecordHit(2, ref resolution);
                     break;
                 case PlateResult.Triple:
-                    resolution.PlateEnded = true;
-                    AdvanceBatter(3);
-                    ResetCount();
+                    RecordHit(3, ref resolution);
                     break;
                 case PlateResult.HomeRun:
-                    resolution.PlateEnded = true;
-                    AdvanceBatter(4);
-                    ResetCount();
+                    RecordHit(4, ref resolution);
                     break;
             }
 
@@ -181,6 +173,13 @@ namespace MiracleDiamond
             {
                 EndHalfInning();
             }
+        }
+
+        private void RecordHit(int basesAdvanced, ref PlayResolution resolution)
+        {
+            resolution.PlateEnded = true;
+            AdvanceBatter(basesAdvanced);
+            ResetCount();
         }
 
         private void WalkBatter()
