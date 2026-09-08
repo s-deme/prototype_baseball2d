@@ -17,14 +17,9 @@
 - 勝つたびに3ライバルを巡るアーケードラダーと連勝記録
 - キーボード、XInputゲームパッド／Steam Input経由のゲームパッド操作（メニューはマウスにも対応）
 
-## 開発環境
+## 遊び始める
 
-- Unity `6000.3.22f1`（Unity 6.3 LTS）
-- Windows 10/11 x64
-- レンダーパイプライン: Built-in
-- 日本語フォント: Noto Sans JP（SIL Open Font License 1.1）
-
-Unity Hubでこのフォルダーを開き、`Assets/Scenes/Main.unity`を再生してください。起動オブジェクトと画面は実行時に自動生成されます。
+Unity Hubでこのフォルダーを Unity `6000.3.22f1`（Unity 6.3 LTS）として開き、`Assets/Scenes/Main.unity` を再生してください。タイトル画面から難易度を選ぶと3イニング戦を始められます。
 
 ## 操作
 
@@ -36,24 +31,6 @@ Unity Hubでこのフォルダーを開き、`Assets/Scenes/Main.unity`を再生
 | 戻る・ポーズ | Esc | B |
 
 攻撃では左右で打者を動かし、曲がる球筋を見ながら手元で打ちます。守備では投手位置と球種を決めて投げ、投球後も左右入力でボールを曲げられます。
-
-## 検証とビルド
-
-```powershell
-.\Scripts\check.ps1
-.\Scripts\build-windows.ps1
-.\Scripts\capture-screenshots.ps1
-```
-
-Windowsビルドは `Builds/Windows/MiracleDiamond.exe` に生成されます。Unityライセンスが有効である必要があります。
-撮影スクリプトはQA画面3枚とSteam用ゲームプレイ画面5枚を `Marketing/Screenshots` に生成します。
-
-## リリース資料
-
-- [Steamリリースチェックリスト](Docs/STEAM_RELEASE.md)
-- [手動QAチェックリスト](Docs/QA_CHECKLIST.md)
-- [ストア文面案](Docs/STEAM_STORE_COPY.md)
-- [マーケティング素材と生成記録](Marketing/README.md)
 
 ## ライセンス
 
