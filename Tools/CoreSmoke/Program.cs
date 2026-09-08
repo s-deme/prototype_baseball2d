@@ -55,10 +55,14 @@ internal static class Program
     private static void ThreeOutsChangeSides()
     {
         var game = new GameRules();
+        game.Apply(PlateResult.Single);
+        game.Apply(PlateResult.Single);
+        game.Apply(PlateResult.Single);
         game.Apply(PlateResult.Out);
         game.Apply(PlateResult.Out);
         var result = game.Apply(PlateResult.Out);
         Check(!game.IsTop && game.Inning == 1 && game.Outs == 0 && result.HalfEnded, "half inning");
+        Check(!game.RunnerOnFirst && !game.RunnerOnSecond && !game.RunnerOnThird, "half inning clears bases");
     }
 
     private static void BottomThirdLeadIsWalkOff()

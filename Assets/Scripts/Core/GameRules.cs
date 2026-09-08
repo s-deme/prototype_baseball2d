@@ -294,9 +294,7 @@ namespace MiracleDiamond
 
         private void ClearBases()
         {
-            bases[0] = false;
-            bases[1] = false;
-            bases[2] = false;
+            Array.Clear(bases, 0, bases.Length);
         }
     }
 
